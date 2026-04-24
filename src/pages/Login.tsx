@@ -40,7 +40,7 @@ const Login = () => {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+    const { error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
     setSubmitting(false);
     if (error) {
       toast.error(error.message);
