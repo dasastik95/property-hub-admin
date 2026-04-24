@@ -24,37 +24,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [rolesLoading, setRolesLoading] = useState(false);
 
+  // ✅ FIXED: Fetch role from profiles table
   const fetchRoles = async (userId: string) => {
     setRolesLoading(true);
+
     const { data, error } = await supabase
-      .from("user_roles")
+      .from("profiles")
       .select("role")
-      .eq("user_id", userId);
-    if (!error && data) {
-      setRoles(data.map((r: { role: AppRole }) => r.role));
+      .eq("id", userId)
+      .single();
+
+    if (!error && data?.role) {
+      setRoles([data.role]); // convert to array
+      console.log("ROLE:", data.role); // 🔍 debug
     } else {
+      console.log("ROLE ERROR:", error);
       setRoles([]);
     }
+
     setRolesLoading(false);
   };
 
   useEffect(() => {
-    // 1) Listener FIRST (synchronous state updates only inside)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        // defer async work
-        setTimeout(() => fetchRoles(newSession.user.id), 0);
-      } else {
-        setRoles([]);
-      }
-    });
+    // 🔁 Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
 
-    // 2) Then check existing session
+        if (newSession?.user) {
+          setTimeout(() => fetchRoles(newSession.user.id), 0);
+        } else {
+          setRoles([]);
+        }
+      }
+    );
+
+    // 🔍 Check existing session on load
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
       setSession(existingSession);
       setUser(existingSession?.user ?? null);
+
       if (existingSession?.user) {
         fetchRoles(existingSession.user.id).finally(() => setLoading(false));
       } else {
@@ -74,13 +84,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (user) await fetchRoles(user.id);
   };
 
+  // ✅ Role checks (based on profiles.role)
   const isSuperAdmin = roles.includes("super_admin");
   const isModerator = roles.includes("moderator");
-  const isAdmin = isSuperAdmin || isModerator;
+
+  // 👉 You can customize this:
+  const isAdmin = isSuperAdmin || roles.includes("admin");
 
   return (
     <AuthContext.Provider
-      value={{ user, session, roles, isAdmin, isSuperAdmin, isModerator, loading, rolesLoading, signOut, refreshRoles }}
+      value={{
+        user,
+        session,
+        roles,
+        isAdmin,
+        isSuperAdmin,
+        isModerator,
+        loading,
+        rolesLoading,
+        signOut,
+        refreshRoles
+      }}
     >
       {children}
     </AuthContext.Provider>
